@@ -1,17 +1,15 @@
 import math
 import os
 os.environ['SDL_VIDEO_WINDOW_POS'] = "150,120"
-import pygame as pg
+import pygame as pg 
 import pygame_gui as pgg # type: ignore
 import sys
 
 class settings:
     screen_width = 1200
     screen_height = 800
-    vert_color:str = "red"
     projection_angle:int = 90
     recursive_rendering:bool = True
-    show_controls:bool = True
     control_width = 300
     show_grid:bool = True
     grid_height = -6
