@@ -1,6 +1,6 @@
 **Free Use License**
 
-Copyright Rosepen Studios, 2025
+Copyright _M2x, 2025
 
 {Unmodifiable Section}
 
