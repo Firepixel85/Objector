@@ -254,16 +254,9 @@ def render():
     pg_draw(p1, p3, "red")
     pg_draw(p2, p4, "red")
 
-    
     render_done = True
 
 
-
-def rotate_grid(vector:list):
-    for i in range(len(grid_x)):
-        exe_rotation(vector,vertexes=grid_x[i], silent=True)
-    for i in range(len(grid_z)):
-        exe_rotation(vector,vertexes=grid_z[i], silent=True)
 
 def translate_verts(v3: list,vertexes:list = verts):
     list_of_verts = []
@@ -271,37 +264,37 @@ def translate_verts(v3: list,vertexes:list = verts):
         vert = [v3x(vert) + float(v3x(v3)), v3y(vert) + float(v3y(v3)), v3z(vert) + float(v3z(v3))]
         list_of_verts.append(vert)
     return list_of_verts
-    
     if vertexes == verts:
         original_verts = verts
 
 def rotate_verts_x(angle: float,vertexes:list = verts, silent:bool = False):
-    for i in range(len(vertexes)):
-        vertexes[i] = multi_m33_v3([
+    for vert in vertexes:
+        vert = multi_m33_v3([
             [1,0,0],
             [0,math.cos(math.radians(angle)),-math.sin(math.radians(angle))],
             [0,math.sin(math.radians(angle)),math.cos(math.radians(angle))]
-        ], vertexes[i])
+        ], vert)
     if not silent:
         cube.rotation_x += angle
+    
 
 def rotate_verts_y(angle: float,vertexes:list = verts,silent:bool = False):
-    for i in range(len(verts)):
-        vertexes[i] = multi_m33_v3([
+    for vert in vertexes:
+        vert = multi_m33_v3([
             [math.cos(math.radians(angle)),0,math.sin(math.radians(angle))],
             [0,1,0],
             [-math.sin(math.radians(angle)),0,math.cos(math.radians(angle))]
-        ], vertexes[i])
+        ], vert)
     if not silent:
         cube.rotation_y += angle
 
 def rotate_verts_z(angle: float,vertexes:list = verts, silent:bool = False):
-    for i in range(len(vertexes)):
-        vertexes[i] = multi_m33_v3([
+    for vert in vertexes:
+        vert = multi_m33_v3([
             [math.cos(math.radians(angle)), -math.sin(math.radians(angle)), 0],
             [math.sin(math.radians(angle)), math.cos(math.radians(angle)), 0],
             [0,0,1]
-        ], vertexes[i])
+        ], vert)
     if not silent:  
         cube.rotation_z += angle
 
@@ -325,15 +318,28 @@ def exe_world_translation(vector:list, vertexes):
     )
     return translate_verts(vector,vertexes)
 
+def exe_rotation(vector,silent:bool = False):
+    if not silent:
+        position = v3(cube.position_x,cube.position_y,cube.position_z)
+        exe_translation(v3(0,0,0))
+        rotate_verts_x(float(v3x(vector)) - cube.rotation_x,vertexes=verts,silent = silent)
+        rotate_verts_y(float(v3y(vector)) - cube.rotation_y,vertexes=verts,silent = silent)
+        rotate_verts_z(float(v3z(vector)) - cube.rotation_z,vertexes=verts,silent = silent)
+        exe_translation(position)
+    else:
+        rotate_verts_x(float(v3x(vector)) - cube.rotation_x,vertexes=verts,silent = silent)
+        rotate_verts_y(float(v3y(vector)) - cube.rotation_y,vertexes=verts,silent = silent)
+        rotate_verts_z(float(v3z(vector)) - cube.rotation_z,vertexes=verts,silent = silent)
 
+def exe_world_rotation(vector,vertexes:list = verts,silent:bool = False):
+    delta_x = float(v3x(vector)) + float(world.rotation_x)
+    delta_y = float(v3y(vector)) + float(world.rotation_y)
+    delta_z = float(v3z(vector)) + float(world.rotation_z)
+    rotate_verts_x(delta_x, vertexes=vertexes, silent=silent)
+    rotate_verts_y(delta_y, vertexes=vertexes, silent=silent)
+    rotate_verts_z(delta_z, vertexes=vertexes, silent=silent)
+    return vertexes
 
-def exe_rotation(vector,vertexes:list = verts,silent:bool = False):
-    position = v3(cube.position_x,cube.position_y,cube.position_z)
-    exe_translation(v3(0,0,0))
-    rotate_verts_x(float(v3x(vector)) - cube.rotation_x,vertexes=vertexes,silent = silent)
-    rotate_verts_y(float(v3y(vector)) - cube.rotation_y,vertexes=vertexes,silent = silent)
-    rotate_verts_z(float(v3z(vector)) - cube.rotation_z,vertexes=vertexes,silent = silent)
-    exe_translation(position)
 
 def change_fov(fov):
     settings.projection_angle = int(float(fov))
@@ -345,11 +351,11 @@ def translate_camera(vector:list):
     exe_translation(v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))), silent=True)
     for i in range(len(grid_x)):
         grid_x[i] = exe_world_translation(
-            v3(-float(camera_x.get_text()), -float(camera_y.get_text()), -float(camera_z.get_text())),
+            v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))),
             vertexes=original_grid_x[i]
         )
         grid_z[i] = exe_world_translation(
-            v3(-float(camera_x.get_text()), -float(camera_y.get_text()), -float(camera_z.get_text())),
+            v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))),
             vertexes=original_grid_z[i]
         )
     world.position_x = float(v3x(vector))
@@ -358,6 +364,29 @@ def translate_camera(vector:list):
     camera_x.set_text(str(world.position_x))
     camera_y.set_text(str(world.position_y))
     camera_z.set_text(str(world.position_z))
+    
+
+def rotate_camera(vector:list):
+    global axes
+    exe_world_rotation(v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))), vertexes=original_axes)
+    exe_world_rotation(v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))), vertexes=verts)
+    for i in range(len(grid_x)):
+        exe_world_rotation(
+            v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))),
+            vertexes=original_grid_x[i]
+        )
+        exe_world_rotation(
+            v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))),
+            vertexes=original_grid_z[i]
+        )
+    world.rotation_x = float(v3x(vector))
+    world.rotation_y = float(v3y(vector))
+    world.rotation_z = float(v3z(vector))
+    camera_rx.set_text(str(world.rotation_x))
+    camera_ry.set_text(str(world.rotation_y))
+    camera_rz.set_text(str(world.rotation_z))
+
+
 
 #### UI Elements ####
 
@@ -446,14 +475,12 @@ while running:
                     float(camera_z.get_text())
                 ))
                 render()
-                
-
             elif event.ui_element == rotate_camera_btn:
-                world.rotation_x = float(camera_rx.get_text())
-                world.rotation_y = float(camera_ry.get_text())
-                world.rotation_z = float(camera_rz.get_text())
-                exe_rotation(v3(-world.rotation_x, -world.rotation_y, -world.rotation_z), silent=True)
-                #rotate_grid(v3(-world.rotation_x, -world.rotation_y, -world.rotation_z))
+                rotate_camera(v3(
+                    float(camera_rx.get_text()),
+                    float(camera_ry.get_text()),
+                    float(camera_rz.get_text())
+                ))
                 render()
         elif event.type == pg.KEYDOWN:
             key = event.key
