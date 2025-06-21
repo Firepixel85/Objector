@@ -13,7 +13,7 @@ class settings:
     control_width = 300
     show_grid:bool = True
     grid_height = -6
-    move_amount:float = 1.0
+    move_amount:float = 0.3
 class cube:
     position_x:float = 0.0
     position_z:float = 0.0
@@ -53,8 +53,6 @@ def map_color(color):
     elif color == "white":
         return(255,255,255)
 
-def pg_draw(vert1:list,vert2:list,color,surface=screen):
-    pg.draw.line(surface,map_color(color),pg_cords(v2x(vert1),v2y(vert1)),pg_cords(v2x(vert2),v2y(vert2)),1)
 
 #### Vector 2 Functions ####
 
@@ -113,18 +111,68 @@ def multi_m33_v3(m33:list,v3:list):
         z.append(calculation)
         znew += z[i]
     return [xnew,ynew,znew]
+
+def is_positive(n):
+    return n > 0 
 ###########################
 
+def pg_draw(vert1:list,vert2:list,color,surface=screen):
+    vert1 = normalize_y(vert1,vert2)
+    vert2 = normalize_y(vert2,vert1)
+    vert1 = normalize_x(vert1,vert2)
+    vert2 = normalize_x(vert2,vert1)
+    
+    pg.draw.line(surface,map_color(color),pg_cords(v2x(vert1),v2y(vert1)),pg_cords(v2x(vert2),v2y(vert2)),1)
 
+def normalize_x(normal, data):
+    min_x = -settings.screen_width / 2
+    max_x = settings.screen_width / 2
+    x1, y1 = v2x(normal), v2y(normal)
+    x2, y2 = v2x(data), v2y(data)
+    if x1 < min_x or x1 > max_x:
+        # Clamp x1 to the screen edge and interpolate y1
+        if x1 < min_x:
+            edge_x = min_x
+        else:
+            edge_x = max_x
+        if x1 != x2:
+            t = (edge_x - x2) / (x1 - x2)
+            edge_y = y2 + (y1 - y2) * t
+        else:
+            edge_y = y1
+        return v2(edge_x, edge_y)
+    else:
+        return v2(x1, y1)
+
+def normalize_y(normal, data):
+    min_y = -settings.screen_height / 2
+    max_y = settings.screen_height / 2
+    x1, y1 = v2x(normal), v2y(normal)
+    x2, y2 = v2x(data), v2y(data)
+    if y1 < min_y or y1 > max_y:
+        # Clamp y1 to the screen edge and interpolate x1
+        if y1 < min_y:
+            edge_y = min_y
+        else:
+            edge_y = max_y
+        if y1 != y2:
+            t = (edge_y - y2) / (y1 - y2)
+            edge_x = x2 + (x1 - x2) * t
+        else:
+            edge_x = x1
+        return v2(edge_x, edge_y)
+    else:
+        return v2(x1, y1)
+        
 #Initialises cube vertecies
-ve1 = v3(-5,-5,100)
-ve2 = v3(5,-5,100)
-ve3 = v3(-5,5,100)
-ve4 = v3(5,5,100)
-ve5 = v3(-5,-5,110)
-ve6 = v3(5,-5,110)
-ve7 = v3(-5,5,110)
-ve8 = v3(5,5,110)
+ve1 = v3(-5,-5,-5)
+ve2 = v3(5,-5,-5)
+ve3 = v3(-5,5,-5)
+ve4 = v3(5,5,-5)
+ve5 = v3(-5,-5,5)
+ve6 = v3(5,-5,5)
+ve7 = v3(-5,5,5)
+ve8 = v3(5,5,5)
 verts = [ve1,ve2,ve3,ve4,ve5,ve6,ve7,ve8]
 original_verts = [v3(*v) for v in verts]
 
@@ -141,7 +189,7 @@ original_axes = [v3(*axis) for axis in axes]
 
 edge_len = v3x(ve2) - v3x(ve1)
 
-mult = 3000
+mult = 2700
 def map_projection(array: list, camera_z=200):
     cords = []
     for vert in array:
@@ -170,29 +218,33 @@ def get_transformed_verts():
     ]
     transformed = []
     for v in original_verts:
+        # Move to cube center
         v0 = [v3x(v) - center[0], v3y(v) - center[1], v3z(v) - center[2]]
+        # Apply cube's own rotation
         v_rot = multi_m33_v3([
             [1,0,0],
-            [0,math.cos(math.radians(cube.rotation_x-world.rotation_x)),-math.sin(math.radians(cube.rotation_x-world.rotation_x))],
-            [0,math.sin(math.radians(cube.rotation_x-world.rotation_x)),math.cos(math.radians(cube.rotation_x-world.rotation_x))]
+            [0,math.cos(math.radians(cube.rotation_x)),-math.sin(math.radians(cube.rotation_x))],
+            [0,math.sin(math.radians(cube.rotation_x)),math.cos(math.radians(cube.rotation_x))]
         ], v0)
         v_rot = multi_m33_v3([
-            [math.cos(math.radians(cube.rotation_y-world.rotation_y)),0,math.sin(math.radians(cube.rotation_y-world.rotation_y))],
+            [math.cos(math.radians(cube.rotation_y)),0,math.sin(math.radians(cube.rotation_y))],
             [0,1,0],
-            [-math.sin(math.radians(cube.rotation_y-world.rotation_y)),0,math.cos(math.radians(cube.rotation_y-world.rotation_y))]
+            [-math.sin(math.radians(cube.rotation_y)),0,math.cos(math.radians(cube.rotation_y))]
         ], v_rot)
         v_rot = multi_m33_v3([
-            [math.cos(math.radians(cube.rotation_z-world.rotation_z)), -math.sin(math.radians(cube.rotation_z-world.rotation_z)), 0],
-            [math.sin(math.radians(cube.rotation_z-world.rotation_z)), math.cos(math.radians(cube.rotation_z-world.rotation_z)), 0],
+            [math.cos(math.radians(cube.rotation_z)), -math.sin(math.radians(cube.rotation_z)), 0],
+            [math.sin(math.radians(cube.rotation_z)), math.cos(math.radians(cube.rotation_z)), 0],
             [0,0,1]
         ], v_rot)
+        # Move back from center and apply cube translation
         v_rot = [
-            v_rot[0] + center[0] + float(cube.position_x) - float(world.position_x),
-            v_rot[1] + center[1] + float(cube.position_y) - float(world.position_y),
-            v_rot[2] + center[2] + float(cube.position_z) - float(world.position_z)
+            v_rot[0] + center[0] + float(cube.position_x),
+            v_rot[1] + center[1] + float(cube.position_y),
+            v_rot[2] + center[2] + float(cube.position_z)
         ]
         transformed.append(v_rot)
-    return transformed
+    # Now apply camera transformation to all cube verts
+    return get_camera_transformed(transformed)
 grid_x = []
 grid_z = []
 render_done:bool = True
@@ -220,18 +272,63 @@ def render_grid():
         #print("z",line)
         pg_draw(d2_line[0], d2_line[1], "white")
 
+def get_camera_transformed(points):
+    # Apply camera translation and rotation to a list of points
+    transformed = []
+    for v in points:
+        # Translate by negative camera position
+        v_t = [
+            v3x(v) - world.position_x,
+            v3y(v) - world.position_y,
+            v3z(v) - world.position_z
+        ]
+        # Rotate by negative camera rotation (to simulate camera movement)
+        # X
+        v_r = multi_m33_v3([
+            [1,0,0],
+            [0,math.cos(math.radians(-world.rotation_x)),-math.sin(math.radians(-world.rotation_x))],
+            [0,math.sin(math.radians(-world.rotation_x)),math.cos(math.radians(-world.rotation_x))]
+        ], v_t)
+        # Y
+        v_r = multi_m33_v3([
+            [math.cos(math.radians(-world.rotation_y)),0,math.sin(math.radians(-world.rotation_y))],
+            [0,1,0],
+            [-math.sin(math.radians(-world.rotation_y)),0,math.cos(math.radians(-world.rotation_y))]
+        ], v_r)
+        # Z
+        v_r = multi_m33_v3([
+            [math.cos(math.radians(-world.rotation_z)), -math.sin(math.radians(-world.rotation_z)), 0],
+            [math.sin(math.radians(-world.rotation_z)), math.cos(math.radians(-world.rotation_z)), 0],
+            [0,0,1]
+        ], v_r)
+        transformed.append(v_r)
+    return transformed
+
+def get_camera_transformed_grid(original_grid):
+    return [get_camera_transformed(line) for line in original_grid]
+
 def render():
     render_done = False 
     screen.fill((0, 0, 0))
-    axes_projection = map_projection(axes)
+    # Axes
+    axes_projection = map_projection(get_camera_transformed(original_axes))
     pg_draw(axes_projection[0], axes_projection[1], "red")
     pg_draw(axes_projection[2], axes_projection[3], "green")
     pg_draw(axes_projection[4], axes_projection[5], "blue")
 
-    
-    projection = map_projection(get_transformed_verts())
+    # Grid
     if settings.show_grid:
-        render_grid()
+        grid_x_lines = get_camera_transformed_grid(original_grid_x)
+        grid_z_lines = get_camera_transformed_grid(original_grid_z)
+        for line in grid_x_lines:
+            d2_line = map_projection(line)
+            pg_draw(d2_line[0], d2_line[1], "white")
+        for line in grid_z_lines:
+            d2_line = map_projection(line)
+            pg_draw(d2_line[0], d2_line[1], "white")
+
+    # Cube
+    projection = map_projection(get_transformed_verts())
     p1 = projection[0]
     p2 = projection[1]
     p3 = projection[2]
@@ -318,20 +415,13 @@ def exe_world_translation(vector:list, vertexes):
     )
     return translate_verts(vector,vertexes)
 
-def exe_rotation(vector,silent:bool = False):
-    if not silent:
-        position = v3(cube.position_x,cube.position_y,cube.position_z)
-        exe_translation(v3(0,0,0))
-        rotate_verts_x(float(v3x(vector)) - cube.rotation_x,vertexes=verts,silent = silent)
-        rotate_verts_y(float(v3y(vector)) - cube.rotation_y,vertexes=verts,silent = silent)
-        rotate_verts_z(float(v3z(vector)) - cube.rotation_z,vertexes=verts,silent = silent)
-        exe_translation(position)
-    else:
-        rotate_verts_x(float(v3x(vector)) - cube.rotation_x,vertexes=verts,silent = silent)
-        rotate_verts_y(float(v3y(vector)) - cube.rotation_y,vertexes=verts,silent = silent)
-        rotate_verts_z(float(v3z(vector)) - cube.rotation_z,vertexes=verts,silent = silent)
+def exe_rotation(vector, silent:bool = False):
+    # Only update the cube's own rotation
+    cube.rotation_x = float(v3x(vector))
+    cube.rotation_y = float(v3y(vector))
+    cube.rotation_z = float(v3z(vector))
 
-def exe_world_rotation(vector,vertexes:list = verts,silent:bool = False):
+def exe_world_rotation(vector,vertexes:list = verts,silent:bool = True):
     delta_x = float(v3x(vector)) + float(world.rotation_x)
     delta_y = float(v3y(vector)) + float(world.rotation_y)
     delta_z = float(v3z(vector)) + float(world.rotation_z)
@@ -450,6 +540,18 @@ clock = pg.time.Clock()
 running = True
 
 render()
+moving_backward = False
+moving_forward = False
+moving_left = False
+moving_right = False
+moving_up = False
+moving_down = False
+rotating_up = False
+rotating_down = False
+rotating_left = False
+rotating_right = False
+rotating_left2 = False
+rotating_right2 = False 
 
 while running:
     time_delta = clock.tick(60) / 1000.0
@@ -488,24 +590,106 @@ while running:
                 pg.quit()
                 sys.exit()
             elif key == pg.K_w:
-                translate_camera(v3(world.position_x, world.position_y, world.position_z + settings.move_amount))
-                render()
+                moving_backward = True
             elif key == pg.K_s:
-                translate_camera(v3(world.position_x, world.position_y, world.position_z - settings.move_amount))
+                moving_forward = True
             elif key == pg.K_a:
-                translate_camera(v3(world.position_x - settings.move_amount, world.position_y, world.position_z))
-                render()
-            elif key == pg.K_d: 
-                translate_camera(v3(world.position_x + settings.move_amount, world.position_y, world.position_z))
-                render()
+                moving_left = True
+            elif key == pg.K_d:
+                moving_right = True
             elif key == pg.K_LSHIFT:
-                translate_camera(v3(world.position_x, world.position_y - settings.move_amount, world.position_z))
-                render()
+                moving_down = True
             elif key == pg.K_SPACE:
-                translate_camera(v3(world.position_x, world.position_y + settings.move_amount, world.position_z))
-                render()
+                moving_up = True
+            # Camera rotation keys
+            elif key == pg.K_f:
+                rotating_left = True
+            elif key == pg.K_h:
+                rotating_right = True
+            elif key == pg.K_t:
+                rotating_down = True
+            elif key == pg.K_g:
+                rotating_up = True
+            elif key == pg.K_r:
+                rotating_right2 = True
+            elif key == pg.K_y:
+                rotating_left2 = True
 
-        manager.process_events(event)
+        elif event.type == pg.KEYUP:
+            key = event.key
+            # Unset the flag when the key is released
+            if key == pg.K_w:
+                moving_backward = False
+            elif key == pg.K_s:
+                moving_forward = False
+            elif key == pg.K_a:
+                moving_left = False
+            elif key == pg.K_d:
+                moving_right = False
+            elif key == pg.K_LSHIFT:
+                moving_down = False
+            elif key == pg.K_SPACE:
+                moving_up = False
+            # Camera rotation keys
+            elif key == pg.K_f:
+                rotating_left = False
+            elif key == pg.K_h:
+                rotating_right = False
+            elif key == pg.K_t:
+                rotating_down = False
+            elif key == pg.K_g:
+                rotating_up = False
+            elif key == pg.K_r:
+                rotating_right2 = False
+            elif key == pg.K_y:
+                rotating_left2 = False
+
+    manager.process_events(event)
+    
+    move_amt = settings.move_amount
+    cam_pos = [world.position_x, world.position_y, world.position_z]
+    cam_rot = [world.rotation_x, world.rotation_y, world.rotation_z]
+    moved = False
+    if moving_forward:
+        cam_pos[2] -= move_amt*2
+        moved = True
+    if moving_backward:
+        cam_pos[2] += move_amt*2
+        moved = True
+    if moving_left:
+        cam_pos[0] -= move_amt
+        moved = True
+    if moving_right:
+        cam_pos[0] += move_amt
+        moved = True
+    if moving_up:
+        cam_pos[1] += move_amt
+        moved = True
+    if moving_down:
+        cam_pos[1] -= move_amt
+        moved = True
+    if rotating_up:
+        cam_rot[0] += move_amt
+        moved = True
+    if rotating_down:
+        cam_rot[0] -= move_amt
+        moved = True
+    if rotating_left:
+        cam_rot[1] -= move_amt
+        moved = True
+    if rotating_right:
+        cam_rot[1] += move_amt
+        moved = True
+    if rotating_left2:
+        cam_rot[2] -= move_amt
+        moved = True
+    if rotating_right2:
+        cam_rot[2] += move_amt
+        moved = True
+    if moved:
+        translate_camera(cam_pos)
+        rotate_camera(cam_rot)
+    render()
 
     manager.update(time_delta)
 
