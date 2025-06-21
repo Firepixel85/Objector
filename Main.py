@@ -123,6 +123,26 @@ def pg_draw(vert1:list,vert2:list,color,surface=screen):
     vert2 = normalize_x(vert2,vert1)
     
     pg.draw.line(surface,map_color(color),pg_cords(v2x(vert1),v2y(vert1)),pg_cords(v2x(vert2),v2y(vert2)),1)
+def pg_draw_rect(rect:list,color,surface=screen):
+    rect[0] = normalize_y(rect[0],rect[1])
+    rect[1] = normalize_y(rect[1],rect[0])
+    rect[2] = normalize_y(rect[2],rect[3])
+    rect[3] = normalize_y(rect[3],rect[2])
+    rect[0] = normalize_x(rect[0],rect[1])
+    rect[1] = normalize_x(rect[1],rect[0])
+    rect[2] = normalize_x(rect[2],rect[3])
+    rect[3] = normalize_x(rect[3],rect[2])
+    pg.draw.rect(
+        surface,
+        map_color(color),
+        pg.Rect(
+            pg_cords(v2x(rect[0]), v2y(rect[0])),
+            (pg_cords(v2x(rect[1]), v2y(rect[1]))[0] - pg_cords(v2x(rect[0]), v2y(rect[0]))[0],
+             pg_cords(v2x(rect[3]), v2y(rect[3]))[1] - pg_cords(v2x(rect[0]), v2y(rect[0]))[1])
+        ),
+        1
+    )
+
 
 def normalize_x(normal, data):
     min_x = -settings.screen_width / 2
@@ -190,7 +210,7 @@ original_axes = [v3(*axis) for axis in axes]
 edge_len = v3x(ve2) - v3x(ve1)
 
 mult = 2700
-def map_projection(array: list, camera_z=200):
+def map_projection(array: list, camera_z=world.position_z):
     cords = []
     for vert in array:
         z = v3z(vert) + camera_z  
@@ -249,11 +269,11 @@ grid_x = []
 grid_z = []
 render_done:bool = True
 
-for i in range(-10, 10):
+for i in range(-10, 11):
     line = [v3(-100,settings.grid_height,i*10),v3(100,settings.grid_height,i*10)]
     grid_x.append(line)
     pg_draw(line[0], line[1], "white")
-for i in range(-10, 10):
+for i in range(-10, 11):
     line = [v3(i*10,settings.grid_height,-100),v3(i*10,settings.grid_height,100)]
     grid_z.append(line)
     pg_draw(line[0], line[1], "white")
@@ -307,6 +327,27 @@ def get_camera_transformed(points):
 def get_camera_transformed_grid(original_grid):
     return [get_camera_transformed(line) for line in original_grid]
 
+def get_camera_directions():
+    # Only use yaw for forward/right movement (FPS style)
+    ry = math.radians(world.rotation_y)
+    rx = math.radians(world.rotation_x)
+
+    # Forward vector (XZ plane, ignores pitch)
+    forward = [
+        -math.sin(ry),
+        0,
+        -math.cos(ry)
+    ]
+    # Right vector (XZ plane)
+    right = [
+        math.cos(ry),
+        0,
+        -math.sin(ry)
+    ]
+    # Up vector (world up)
+    up = [0, 1, 0]
+    return forward, right, up
+
 def render():
     render_done = False 
     screen.fill((0, 0, 0))
@@ -350,6 +391,10 @@ def render():
     pg_draw(p3, p4, "red")
     pg_draw(p1, p3, "red")
     pg_draw(p2, p4, "red")
+    pg_draw_rect(
+        [p1, p2, p4, p3],
+        "white"
+    )
 
     render_done = True
 
@@ -456,19 +501,7 @@ def translate_camera(vector:list):
     camera_z.set_text(str(world.position_z))
     
 
-def rotate_camera(vector:list):
-    global axes
-    exe_world_rotation(v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))), vertexes=original_axes)
-    exe_world_rotation(v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))), vertexes=verts)
-    for i in range(len(grid_x)):
-        exe_world_rotation(
-            v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))),
-            vertexes=original_grid_x[i]
-        )
-        exe_world_rotation(
-            v3(-float(v3x(vector)), -float(v3y(vector)), -float(v3z(vector))),
-            vertexes=original_grid_z[i]
-        )
+def rotate_camera(vector: list):
     world.rotation_x = float(v3x(vector))
     world.rotation_y = float(v3y(vector))
     world.rotation_z = float(v3z(vector))
@@ -540,6 +573,8 @@ clock = pg.time.Clock()
 running = True
 
 render()
+
+# Movement flags
 moving_backward = False
 moving_forward = False
 moving_left = False
@@ -552,6 +587,8 @@ rotating_left = False
 rotating_right = False
 rotating_left2 = False
 rotating_right2 = False 
+
+move_amt = settings.move_amount
 
 while running:
     time_delta = clock.tick(60) / 1000.0
@@ -614,6 +651,9 @@ while running:
                 rotating_right2 = True
             elif key == pg.K_y:
                 rotating_left2 = True
+            # Speed
+            elif key == pg.K_LCTRL:
+                move_amt = settings.move_amount * 2
 
         elif event.type == pg.KEYUP:
             key = event.key
@@ -643,30 +683,49 @@ while running:
                 rotating_right2 = False
             elif key == pg.K_y:
                 rotating_left2 = False
+            #Speed
+            elif key == pg.K_LCTRL:
+                move_amt = settings.move_amount
+            
+
 
     manager.process_events(event)
-    
-    move_amt = settings.move_amount
+
     cam_pos = [world.position_x, world.position_y, world.position_z]
     cam_rot = [world.rotation_x, world.rotation_y, world.rotation_z]
     moved = False
+
+    forward, right, up = get_camera_directions()
+
     if moving_forward:
-        cam_pos[2] -= move_amt*2
+        cam_pos[0] += forward[0] * move_amt * 2
+        cam_pos[1] += forward[1] * move_amt * 2
+        cam_pos[2] += forward[2] * move_amt * 2
         moved = True
     if moving_backward:
-        cam_pos[2] += move_amt*2
+        cam_pos[0] -= forward[0] * move_amt * 2
+        cam_pos[1] -= forward[1] * move_amt * 2
+        cam_pos[2] -= forward[2] * move_amt * 2
         moved = True
     if moving_left:
-        cam_pos[0] -= move_amt
+        cam_pos[0] -= right[0] * move_amt
+        cam_pos[1] -= right[1] * move_amt
+        cam_pos[2] -= right[2] * move_amt
         moved = True
     if moving_right:
-        cam_pos[0] += move_amt
+        cam_pos[0] += right[0] * move_amt
+        cam_pos[1] += right[1] * move_amt
+        cam_pos[2] += right[2] * move_amt
         moved = True
     if moving_up:
-        cam_pos[1] += move_amt
+        cam_pos[0] += up[0] * move_amt
+        cam_pos[1] += up[1] * move_amt
+        cam_pos[2] += up[2] * move_amt
         moved = True
     if moving_down:
-        cam_pos[1] -= move_amt
+        cam_pos[0] -= up[0] * move_amt
+        cam_pos[1] -= up[1] * move_amt
+        cam_pos[2] -= up[2] * move_amt
         moved = True
     if rotating_up:
         cam_rot[0] += move_amt
