@@ -8,12 +8,15 @@ import sys
 class settings:
     screen_width = 1200
     screen_height = 800
-    projection_angle:int = 90
-    recursive_rendering:bool = True
+    projection_angle:int = 90 #FOV
     control_width = 300
     show_grid:bool = True
     grid_height = -6
     move_amount:float = 0.3
+
+class experiments:
+    draw_faces:bool = False # Draws the cube faces
+
 class cube:
     position_x:float = 0.0
     position_z:float = 0.0
@@ -29,6 +32,11 @@ class world:
     rotation_x:float = 0.0
     rotation_y:float = 0.0
     rotation_z:float = 0.0
+    orientation = [
+        [1,0,0],
+        [0,1,0],
+        [0,0,1]
+    ]
 
 pg.init()
 screen = pg.display.set_mode((settings.screen_width, settings.screen_height))
@@ -37,6 +45,8 @@ clock = pg.time.Clock()
 manager = pgg.UIManager((settings.screen_width, settings.screen_height))
 running = True
 extras_rendered:bool = False
+
+#### CORE START ####
 
 def pg_cords(x, y):
     CENTER_X = settings.screen_width/2
@@ -112,36 +122,20 @@ def multi_m33_v3(m33:list,v3:list):
         znew += z[i]
     return [xnew,ynew,znew]
 
+def multi_m33_m33(a, b):
+    # Multiplies two 3x3 matrices
+    return [
+        [
+            sum(a[i][k] * b[k][j] for k in range(3))
+            for j in range(3)
+        ]
+        for i in range(3)
+    ]
+
 def is_positive(n):
     return n > 0 
-###########################
 
-def pg_draw(vert1:list,vert2:list,color,surface=screen):
-    vert1 = normalize_y(vert1,vert2)
-    vert2 = normalize_y(vert2,vert1)
-    vert1 = normalize_x(vert1,vert2)
-    vert2 = normalize_x(vert2,vert1)
-    
-    pg.draw.line(surface,map_color(color),pg_cords(v2x(vert1),v2y(vert1)),pg_cords(v2x(vert2),v2y(vert2)),1)
-def pg_draw_rect(rect:list,color,surface=screen):
-    rect[0] = normalize_y(rect[0],rect[1])
-    rect[1] = normalize_y(rect[1],rect[0])
-    rect[2] = normalize_y(rect[2],rect[3])
-    rect[3] = normalize_y(rect[3],rect[2])
-    rect[0] = normalize_x(rect[0],rect[1])
-    rect[1] = normalize_x(rect[1],rect[0])
-    rect[2] = normalize_x(rect[2],rect[3])
-    rect[3] = normalize_x(rect[3],rect[2])
-    pg.draw.rect(
-        surface,
-        map_color(color),
-        pg.Rect(
-            pg_cords(v2x(rect[0]), v2y(rect[0])),
-            (pg_cords(v2x(rect[1]), v2y(rect[1]))[0] - pg_cords(v2x(rect[0]), v2y(rect[0]))[0],
-             pg_cords(v2x(rect[3]), v2y(rect[3]))[1] - pg_cords(v2x(rect[0]), v2y(rect[0]))[1])
-        ),
-        1
-    )
+#### CORE END ####
 
 
 def normalize_x(normal, data):
@@ -183,6 +177,23 @@ def normalize_y(normal, data):
         return v2(edge_x, edge_y)
     else:
         return v2(x1, y1)
+    
+def pg_draw(vert1:list,vert2:list,color,surface=screen):
+    vert1 = normalize_y(vert1,vert2)
+    vert2 = normalize_y(vert2,vert1)
+    vert1 = normalize_x(vert1,vert2)
+    vert2 = normalize_x(vert2,vert1)
+    pg.draw.line(surface,map_color(color),pg_cords(v2x(vert1),v2y(vert1)),pg_cords(v2x(vert2),v2y(vert2)),1)
+
+def pg_draw_poly(polycords:list,color,surface=screen):
+    if len(polycords) < 4 or len(polycords) > 4:
+        raise ValueError("Draw call rejected: Polygon must have 4 point")
+    
+    
+
+    pg.draw.polygon(surface, map_color(color), [pg_cords(v2x(pt), v2y(pt)) for pt in polycords],width=0)
+
+
         
 #Initialises cube vertecies
 ve1 = v3(-5,-5,-5)
@@ -265,6 +276,7 @@ def get_transformed_verts():
         transformed.append(v_rot)
     # Now apply camera transformation to all cube verts
     return get_camera_transformed(transformed)
+
 grid_x = []
 grid_z = []
 render_done:bool = True
@@ -289,38 +301,21 @@ def render_grid():
         
     for line in grid_z:
         d2_line = map_projection(line)
-        #print("z",line)
         pg_draw(d2_line[0], d2_line[1], "white")
 
 def get_camera_transformed(points):
-    # Apply camera translation and rotation to a list of points
     transformed = []
+    orientation_T = [list(row) for row in zip(*world.orientation)]
     for v in points:
-        # Translate by negative camera position
         v_t = [
             v3x(v) - world.position_x,
             v3y(v) - world.position_y,
             v3z(v) - world.position_z
         ]
-        # Rotate by negative camera rotation (to simulate camera movement)
-        # X
-        v_r = multi_m33_v3([
-            [1,0,0],
-            [0,math.cos(math.radians(-world.rotation_x)),-math.sin(math.radians(-world.rotation_x))],
-            [0,math.sin(math.radians(-world.rotation_x)),math.cos(math.radians(-world.rotation_x))]
-        ], v_t)
-        # Y
-        v_r = multi_m33_v3([
-            [math.cos(math.radians(-world.rotation_y)),0,math.sin(math.radians(-world.rotation_y))],
-            [0,1,0],
-            [-math.sin(math.radians(-world.rotation_y)),0,math.cos(math.radians(-world.rotation_y))]
-        ], v_r)
-        # Z
-        v_r = multi_m33_v3([
-            [math.cos(math.radians(-world.rotation_z)), -math.sin(math.radians(-world.rotation_z)), 0],
-            [math.sin(math.radians(-world.rotation_z)), math.cos(math.radians(-world.rotation_z)), 0],
-            [0,0,1]
-        ], v_r)
+        v_r = [
+            sum(orientation_T[i][j] * v_t[j] for j in range(3))
+            for i in range(3)
+        ]
         transformed.append(v_r)
     return transformed
 
@@ -328,28 +323,13 @@ def get_camera_transformed_grid(original_grid):
     return [get_camera_transformed(line) for line in original_grid]
 
 def get_camera_directions():
-    # Only use yaw for forward/right movement (FPS style)
-    ry = math.radians(world.rotation_y)
-    rx = math.radians(world.rotation_x)
-
-    # Forward vector (XZ plane, ignores pitch)
-    forward = [
-        -math.sin(ry),
-        0,
-        -math.cos(ry)
-    ]
-    # Right vector (XZ plane)
-    right = [
-        math.cos(ry),
-        0,
-        -math.sin(ry)
-    ]
-    # Up vector (world up)
-    up = [0, 1, 0]
+    orientation = world.orientation
+    right = [orientation[0][0], orientation[1][0], orientation[2][0]]
+    up = [orientation[0][1], orientation[1][1], orientation[2][1]]
+    forward = [-orientation[0][2], -orientation[1][2], -orientation[2][2]]
     return forward, right, up
 
 def render():
-    render_done = False 
     screen.fill((0, 0, 0))
     # Axes
     axes_projection = map_projection(get_camera_transformed(original_axes))
@@ -391,12 +371,14 @@ def render():
     pg_draw(p3, p4, "red")
     pg_draw(p1, p3, "red")
     pg_draw(p2, p4, "red")
-    pg_draw_rect(
-        [p1, p2, p4, p3],
-        "white"
-    )
+    
+    if experiments.draw_faces:
+        pg_draw_poly([p5, p7, p8, p6], "blue")
+        pg_draw_poly([p1, p3, p4, p2], "red")
+        pg_draw_poly([p1, p2, p6, p5], "green")
+        pg_draw_poly([p3, p4, p8, p7], "green")
+        pg_draw_poly([p5, p6, p8, p7], "blue")
 
-    render_done = True
 
 
 
@@ -496,20 +478,39 @@ def translate_camera(vector:list):
     world.position_x = float(v3x(vector))
     world.position_y = float(v3y(vector))
     world.position_z = float(v3z(vector))
-    camera_x.set_text(str(world.position_x))
-    camera_y.set_text(str(world.position_y))
-    camera_z.set_text(str(world.position_z))
+
     
 
 def rotate_camera(vector: list):
     world.rotation_x = float(v3x(vector))
     world.rotation_y = float(v3y(vector))
     world.rotation_z = float(v3z(vector))
-    camera_rx.set_text(str(world.rotation_x))
-    camera_ry.set_text(str(world.rotation_y))
-    camera_rz.set_text(str(world.rotation_z))
 
 
+def rotate_camera_local(axis, angle_deg):
+    angle = math.radians(angle_deg)
+    c = math.cos(angle)
+    s = math.sin(angle)
+    if axis == 'x':
+        rot = [
+            [1,0,0],
+            [0,c,-s],
+            [0,s,c]
+        ]
+    elif axis == 'y':
+        rot = [
+            [c,0,s],
+            [0,1,0],
+            [-s,0,c]
+        ]
+    elif axis == 'z':
+        rot = [
+            [c,-s,0],
+            [s,c,0],
+            [0,0,1]
+        ]
+    # Multiply from the right for local rotation
+    world.orientation = multi_m33_m33(world.orientation, rot)
 
 #### UI Elements ####
 
@@ -544,29 +545,6 @@ entry_fov.set_text(str(settings.projection_angle))
 
 change_fov_btn = pgg.elements.UIButton(pg.Rect((190, 270), (80, 30)), "Change", manager)
 
-# Camera Translation
-label_cpos = pgg.elements.UILabel(pg.Rect((10, 320), (120, 30)), "Camera Position", manager)
-
-camera_x = pgg.elements.UITextEntryLine(pg.Rect((10, 360), (80, 30)), manager)
-camera_x.set_text(str(world.position_x))
-camera_y = pgg.elements.UITextEntryLine(pg.Rect((100, 360), (80, 30)), manager)
-camera_y.set_text(str(world.position_y))
-camera_z = pgg.elements.UITextEntryLine(pg.Rect((190, 360), (80, 30)), manager)
-camera_z.set_text(str(world.position_z))
-
-translate_camera_btn = pgg.elements.UIButton(pg.Rect((190, 400), (80, 30)), "Translate", manager)
-
-#Camera Rotation
-label_crot = pgg.elements.UILabel(pg.Rect((10, 450), (120, 30)), "Camera Rotation", manager)
-
-camera_rx = pgg.elements.UITextEntryLine(pg.Rect((10, 490), (80, 30)), manager)
-camera_rx.set_text(str(world.rotation_x))
-camera_ry = pgg.elements.UITextEntryLine(pg.Rect((100, 490), (80, 30)), manager)
-camera_ry.set_text(str(world.rotation_y))
-camera_rz = pgg.elements.UITextEntryLine(pg.Rect((190, 490), (80, 30)), manager)
-camera_rz.set_text(str(world.rotation_z))
-
-rotate_camera_btn = pgg.elements.UIButton(pg.Rect((190, 530), (80, 30)), "Rotate", manager)
 
 #### Main Loop ####
 clock = pg.time.Clock()
@@ -607,19 +585,7 @@ while running:
             elif event.ui_element == change_fov_btn:
                 change_fov(entry_fov.get_text())
                 render()
-            elif event.ui_element == translate_camera_btn:
-                translate_camera(v3(
-                    float(camera_x.get_text()),
-                    float(camera_y.get_text()),
-                    float(camera_z.get_text())
-                ))
-                render()
-            elif event.ui_element == rotate_camera_btn:
-                rotate_camera(v3(
-                    float(camera_rx.get_text()),
-                    float(camera_ry.get_text()),
-                    float(camera_rz.get_text())
-                ))
+
                 render()
         elif event.type == pg.KEYDOWN:
             key = event.key
@@ -728,22 +694,22 @@ while running:
         cam_pos[2] -= up[2] * move_amt
         moved = True
     if rotating_up:
-        cam_rot[0] += move_amt
+        rotate_camera_local('x', move_amt)
         moved = True
     if rotating_down:
-        cam_rot[0] -= move_amt
+        rotate_camera_local('x', -move_amt)
         moved = True
     if rotating_left:
-        cam_rot[1] -= move_amt
+        rotate_camera_local('y', -move_amt)
         moved = True
     if rotating_right:
-        cam_rot[1] += move_amt
+        rotate_camera_local('y', move_amt)
         moved = True
     if rotating_left2:
-        cam_rot[2] -= move_amt
+        rotate_camera_local('z', -move_amt)
         moved = True
     if rotating_right2:
-        cam_rot[2] += move_amt
+        rotate_camera_local('z', move_amt)
         moved = True
     if moved:
         translate_camera(cam_pos)
