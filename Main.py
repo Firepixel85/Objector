@@ -620,6 +620,8 @@ while running:
             # Speed
             elif key == pg.K_LCTRL:
                 move_amt = settings.move_amount * 2
+            elif key == pg.K_LALT:
+                move_amt = settings.move_amount * 4
 
         elif event.type == pg.KEYUP:
             key = event.key
@@ -652,6 +654,9 @@ while running:
             #Speed
             elif key == pg.K_LCTRL:
                 move_amt = settings.move_amount
+            elif key == pg.K_LALT:
+                move_amt = settings.move_amount
+
             
 
 

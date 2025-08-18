@@ -18,6 +18,9 @@ class settings: #Here you can change some of the renderers settings
     projection_angle:int = 90   #Field of view (FOV), the larger it is, the more perspective distortion
     recursive_rendering:bool = True  #Allows for "Animations" to be programmed in line 217 (Keeps rendering and then discrading the render)
     show_controls:bool = True
+
+class cube:
+    position = [-4,-4,0]
  
 if settings.recursive_rendering:
     settings.show_controls = False #Disables controls if recursive rendering is enabled, as it would be pointless
@@ -112,7 +115,7 @@ def render(): #Main render function, runs all operation in order to complete a r
 
     projection = map_projection() #Map vertecies to 2D plane
  
-    #Move data from list to point
+    #Move data from list to points
     p1 = projection[0]
     p2 = projection[1]
     p3 = projection[2]
@@ -151,8 +154,11 @@ def translate_verts(trans_vector: list): #Translates all the cube's vertecis bas
             v3y(verts[i]) + v3y(trans_vector),
             v3z(verts[i]) + v3z(trans_vector)
         ]
- 
-if settings.show_controls: #Initialises the UI if settings.show_controls is True 
+    cube.position[0] += v3x(trans_vector)
+    cube.position[1] += v3y(trans_vector)
+    cube.position[2] += v3z(trans_vector)
+
+if settings.show_controls: #Initialises the UI if settings.show_controls is True
     root = tk.Tk()
 else:
     root = None
@@ -171,13 +177,23 @@ def exe_translation(): #Runs all the needed commands to translate the cube
         render()
  
 translate_verts(v3(-5,-5, 0)) #Due to how the cube coordinates are placed, it is placed off-center this centers it
- 
+
+x = 1 # Variables needed for the animation
+y = 1 #
 while settings.recursive_rendering:
     if render_done: #Awaits for a frame to finish rendering so it can start on the next one
         render()
         #### Recursive rendering loop ####
         
-        translate_verts(v3(-1,-1,0)) #Example animations: moves the cube by -1,-1,0 every frame
+        if cube.position[0] > 17:
+            x = -1
+        if cube.position[1] > 18:
+            y = -1
+        if cube.position[0] < -27: #Example animations: Bounces the cube around the screen
+            x = 1
+        if cube.position[1] < -26:
+            y = 1
+        translate_verts(v3(x,y,0)) 
 
         #### End of recursive rendering loop ####
  
